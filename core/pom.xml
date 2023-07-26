@@ -22,9 +22,9 @@
     <!-- ====================================================================== -->
     <parent>
         <groupId>com.adobe.cq.sample</groupId>
-        <artifactId>we.retail</artifactId>
-        <version>2.0.5-SNAPSHOT</version>
-        <relativePath>../pom.xml</relativePath>
+        <artifactId>we.retail.parent</artifactId>
+        <version>4.0.1-SNAPSHOT</version>
+        <relativePath>../parent/pom.xml</relativePath>
     </parent>
 
     <artifactId>we.retail.core</artifactId>
@@ -52,6 +52,8 @@
                 <configuration>
                     <instructions>
                         <!-- <Embed-Dependency> artifactId1, artifactId2;inline=true </Embed-Dependency> -->
+                        <Export-Package>we.retail.core.model*</Export-Package>
+                        <Private-Package>we.retail.core*</Private-Package> 
                         <Sling-Model-Packages>
                             we.retail.core.model
                         </Sling-Model-Packages>
@@ -109,13 +111,14 @@
             <artifactId>osgi.annotation</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.google.code.findbugs</groupId>
-            <artifactId>jsr305</artifactId>
-        </dependency>
-        <dependency>
             <groupId>javax.inject</groupId>
             <artifactId>javax.inject</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.apache.geronimo.specs</groupId>
+            <artifactId>geronimo-json_1.1_spec</artifactId>
+        </dependency>
+
 
         <!-- Other Dependencies -->
         <dependency>
@@ -130,7 +133,11 @@
             <groupId>javax.servlet</groupId>
             <artifactId>servlet-api</artifactId>
         </dependency>
-
+        <dependency>
+            <groupId>com.google.code.findbugs</groupId>
+            <artifactId>jsr305</artifactId>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
@@ -156,24 +163,25 @@
             <artifactId>io.wcm.testing.aem-mock</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.apache.sling</groupId>
-            <artifactId>org.apache.sling.models.api</artifactId>
-        </dependency>
-        <dependency>
             <groupId>com.adobe.cq</groupId>
             <artifactId>core.wcm.components.core</artifactId>
+            <version>2.4.0</version>
+            <scope>provided</scope>
         </dependency>
-        <dependency>
-            <groupId>com.adobe.cq</groupId>
-            <artifactId>com.adobe.cq.export.json</artifactId>
-            <version>0.0.12</version>
-            <scope>test</scope>
-        </dependency>
+
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-imaging</artifactId>
             <version>1.0-R1534292</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.johnzon</groupId>
+            <artifactId>johnzon-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
         </dependency>
         <!--
             AEM APIs; make sure to not move this bundle upper in the list so that newer APIs available in AEM but not in the Uber

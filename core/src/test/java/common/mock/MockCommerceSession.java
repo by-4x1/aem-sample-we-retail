@@ -42,9 +42,16 @@ import com.adobe.cq.commerce.api.promotion.VoucherInfo;
 import com.adobe.cq.commerce.api.smartlist.SmartListManager;
 import com.adobe.cq.commerce.common.DefaultJcrCartEntry;
 import com.adobe.cq.commerce.common.PriceFilter;
-
-import we.retail.core.WeRetailConstants;
 import we.retail.core.model.Constants;
+
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_CART;
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_LINE;
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_POST_TAX;
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_PRE_TAX;
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_SHIPPING;
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_TAX;
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_TOTAL;
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_UNIT;
 
 public class MockCommerceSession implements CommerceSession {
 
@@ -55,6 +62,8 @@ public class MockCommerceSession implements CommerceSession {
 
     private List<PriceInfo> prices;
 
+    private List<MockDefaultJcrCartEntry> cart;
+
     private Locale locale;
 
     public MockCommerceSession() {
@@ -63,7 +72,7 @@ public class MockCommerceSession implements CommerceSession {
 
     @Override
     public void addCartEntry(Product product, int quantity) throws CommerceException {
-        throw new UnsupportedOperationException();
+        addCartEntry(product, quantity, Collections.emptyMap());
     }
 
     @Override
@@ -118,11 +127,15 @@ public class MockCommerceSession implements CommerceSession {
 
     @Override
     public int getCartEntryCount() throws CommerceException {
-        throw new UnsupportedOperationException();
+        List<CartEntry> cart = getCartEntries();
+        return cart == null ? 0 : cart.size();
     }
 
     @Override
     public List<CartEntry> getCartEntries() throws CommerceException {
+        if (cart != null && !cart.isEmpty()) {
+            return Collections.unmodifiableList(cart);
+        }
         // To mock the shopping cart, we use the first registered order in the mock session 
         if (!placedOrders.isEmpty()) {
             PlacedOrder placedOrder = placedOrders.values().iterator().next();
@@ -134,7 +147,7 @@ public class MockCommerceSession implements CommerceSession {
 
             return placedOrder.getCartEntries();
         }
-        return null;
+        return Collections.emptyList();
     }
 
     private void initializeCartPrices() throws CommerceException {
@@ -146,14 +159,14 @@ public class MockCommerceSession implements CommerceSession {
         List<CartEntry> entries = getCartEntries();
         BigDecimal subTotal = BigDecimal.ZERO;
         for (CartEntry entry : entries) {
-            subTotal = subTotal.add(entry.getPriceInfo(new PriceFilter(WeRetailConstants.PRICE_FILTER_LINE)).get(0).getAmount());
+            subTotal = subTotal.add(entry.getPriceInfo(new PriceFilter(PRICE_TYPE_LINE)).get(0).getAmount());
         }
 
-        setPrice(new PriceInfo(Constants.SHIPPING_TOTAL_VALUE, locale), WeRetailConstants.PRICE_FILTER_SHIPPING);
-        setPrice(new PriceInfo(subTotal, locale), WeRetailConstants.PRICE_FILTER_PRE_TAX);
-        setPrice(new PriceInfo(Constants.TAX_TOTAL_VALUE, locale), WeRetailConstants.PRICE_FILTER_TAX);
+        setPrice(new PriceInfo(Constants.SHIPPING_TOTAL_VALUE, locale), PRICE_TYPE_SHIPPING, PRICE_TYPE_PRE_TAX);
+        setPrice(new PriceInfo(subTotal, locale), PRICE_TYPE_CART, PRICE_TYPE_PRE_TAX);
+        setPrice(new PriceInfo(Constants.TAX_TOTAL_VALUE, locale), PRICE_TYPE_CART, PRICE_TYPE_TAX);
         BigDecimal total = subTotal.add(Constants.SHIPPING_TOTAL_VALUE).add(Constants.TAX_TOTAL_VALUE);
-        setPrice(new PriceInfo(total, locale), WeRetailConstants.PRICE_FILTER_TOTAL);
+        setPrice(new PriceInfo(total, locale), PRICE_TYPE_TOTAL);
     }
 
     private void setPrice(PriceInfo priceInfo, String... types) {
@@ -181,12 +194,16 @@ public class MockCommerceSession implements CommerceSession {
 
     @Override
     public void addCartEntry(Product product, int quantity, Map<String, Object> properties) throws CommerceException {
-        throw new UnsupportedOperationException();
+        if (cart == null) {
+            cart = new ArrayList<>();
+        }
+        MockDefaultJcrCartEntry entry = new MockDefaultJcrCartEntry(cart.size() + 1, product, quantity);
+        cart.add(entry);
     }
 
     @Override
     public void modifyCartEntry(int entryNumber, int quantity) throws CommerceException {
-        throw new UnsupportedOperationException();
+        cart.get(entryNumber).setQuantity(quantity);
     }
 
     @Override
@@ -196,7 +213,9 @@ public class MockCommerceSession implements CommerceSession {
 
     @Override
     public void deleteCartEntry(int entryNumber) throws CommerceException {
-        throw new UnsupportedOperationException();
+        if (cart != null) {
+            cart.remove(entryNumber);
+        }
     }
 
     @Override
@@ -277,11 +296,10 @@ public class MockCommerceSession implements CommerceSession {
             if (price != null) {
                 BigDecimal unitPrice = new BigDecimal(price);
                 DefaultJcrCartEntry jcrCartEntry = (DefaultJcrCartEntry) cartEntry;
-                jcrCartEntry.setPrice(new PriceInfo(unitPrice, locale), WeRetailConstants.PRICE_FILTER_UNIT,
-                        WeRetailConstants.PRICE_FILTER_PRE_TAX);
+                jcrCartEntry.setPrice(new PriceInfo(unitPrice, locale), PRICE_TYPE_UNIT, PRICE_TYPE_PRE_TAX);
                 BigDecimal preTaxPrice = unitPrice.multiply(new BigDecimal(cartEntry.getQuantity()));
-                jcrCartEntry.setPrice(new PriceInfo(preTaxPrice, locale), WeRetailConstants.PRICE_FILTER_LINE,
-                        WeRetailConstants.PRICE_FILTER_PRE_TAX);
+                jcrCartEntry.setPrice(new PriceInfo(preTaxPrice, locale), PRICE_TYPE_LINE, PRICE_TYPE_PRE_TAX);
+                jcrCartEntry.setPrice(new PriceInfo(preTaxPrice, locale), PRICE_TYPE_LINE, PRICE_TYPE_POST_TAX);
             }
         }
     }
@@ -364,5 +382,13 @@ public class MockCommerceSession implements CommerceSession {
      */
     public void registerPlacedOrder(String orderId, PlacedOrder placedOrder) {
         placedOrders.put(orderId, placedOrder);
+    }
+
+    public void clearCart() {
+        cart = null;
+    }
+
+    public void clearPlacedOrders() {
+        placedOrders = new LinkedHashMap<>();
     }
 }

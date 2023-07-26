@@ -27,8 +27,8 @@ import com.day.cq.wcm.api.PageManager;
 public class UrlHelper {
 
     private static final Logger log = LoggerFactory.getLogger(UrlHelper.class);
-    private static final String RT_REDIRECT = "foundation/components/redirect";
-    private static final String PN_REDIRECT_TARGET = "redirectTarget";
+    private static final String RT_REDIRECT = "weretail/components/structure/page";
+    private static final String PN_REDIRECT_TARGET = "cq:redirectTarget";
 
     /**
      * Check if the current page is a redirect page
@@ -59,7 +59,7 @@ public class UrlHelper {
         Page redirectTarget = page;
         if (isRedirectPage(page)) {
             Resource contentResource = page.getContentResource();
-            ValueMap valueMap = contentResource.adaptTo(ValueMap.class);
+            ValueMap valueMap = contentResource.getValueMap();
             String redirectPagePath = valueMap.get(PN_REDIRECT_TARGET, StringUtils.EMPTY);
             Page resolvedPage = pageManager.getPage(redirectPagePath);
             if (resolvedPage != null) {

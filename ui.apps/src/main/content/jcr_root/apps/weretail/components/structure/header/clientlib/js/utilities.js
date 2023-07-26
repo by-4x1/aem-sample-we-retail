@@ -24,7 +24,7 @@
             async  : true,
             success: function (json) {
                 // toggle visibility of header elements as per the current logged in user
-                loadHeader(json['authorizableId']);
+                loadHeader(json['authorizableId'], url);
 
                 // On publish: load the request user into ContextHub
                 if (typeof ContextHub !== "undefined") {
@@ -42,9 +42,10 @@
     /**
      * JS include of header component, bypass dispatcher caching if user is logged in
      * @param currentUser The id of the current logged in user
+     * @param url to load the header for inclusion
      * (should be anonymous if there is no logged in user)
      */
-    function loadHeader(currentUser) {
+    function loadHeader(currentUser, url) {
         $.ajax({
             type   : "GET",
             url    : url,
@@ -78,15 +79,15 @@
     }
 
     $(document).on('we-header-loaded', function() {
-       unreadCounter($('#we-retail-message-count'),
-           "/messaging/jcr:content/content/primary/messagebox_5ab3.social.0.0.json", function(json) {
-           return json["messageCounts"].nonDeletedUnreadCount;
-       });
+        unreadCounter($('#we-retail-message-count'),
+            "/messaging/jcr:content/content/primary/messagebox_5ab3.social.0.0.json", function(json) {
+                return json["messageCounts"].nonDeletedUnreadCount;
+            });
 
         unreadCounter($('#we-retail-notification-count'),
             "/notifications/jcr:content/content/primary/notifications.social.0.0.json", function(json) {
-           return json.unreadCount;
-       });
+                return json.unreadCount;
+            });
 
     });
 })(jQuery, document);

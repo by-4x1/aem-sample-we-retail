@@ -16,24 +16,23 @@
 package we.retail.core.model;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.annotation.PostConstruct;
 
 import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.SlingHttpServletResponse;
-import org.apache.sling.api.resource.ResourceResolver;
-import org.apache.sling.models.annotations.Default;
 import org.apache.sling.models.annotations.Model;
-import org.apache.sling.models.annotations.injectorspecific.InjectionStrategy;
 import org.apache.sling.models.annotations.injectorspecific.ScriptVariable;
 import org.apache.sling.models.annotations.injectorspecific.SlingObject;
-import org.apache.sling.models.annotations.injectorspecific.ValueMapValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,9 +45,11 @@ import com.adobe.cq.commerce.api.Product;
 import com.adobe.cq.commerce.api.promotion.PromotionInfo;
 import com.adobe.cq.commerce.common.PriceFilter;
 import com.day.cq.wcm.api.Page;
-import com.day.cq.wcm.commons.WCMUtils;
 
-import we.retail.core.WeRetailConstants;
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_DISCOUNT;
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_LINE;
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_PRE_TAX;
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_UNIT;
 
 @Model(adaptables = SlingHttpServletRequest.class)
 public class ShoppingCartModel {
@@ -61,35 +62,29 @@ public class ShoppingCartModel {
     @SlingObject
     protected SlingHttpServletResponse response;
 
-    @SlingObject
-    private ResourceResolver resourceResolver;
-
     @ScriptVariable
     private Page currentPage;
-
-    @ValueMapValue(injectionStrategy = InjectionStrategy.OPTIONAL)
-    @Default(booleanValues = false)
-    protected boolean isReadOnly;
 
     protected CommerceSession commerceSession;
     protected List<CartEntry> entries = new ArrayList<CartEntry>();
     protected List<PromotionInfo> allPromotions;
 
-    private String checkoutPage;
-    private String currentPageUrl;
     private List<PromotionInfo> orderPromotions = new ArrayList<PromotionInfo>();
     private Map<Integer, List<PromotionInfo>> cartEntryPromotions = new HashMap<Integer, List<PromotionInfo>>();
 
     @PostConstruct
-    private void initModel() throws Exception {
+    private void initModel() throws CommerceException {
         createCommerceSession();
-        populatePageUrls();
         populatePromotions();
         populateCartEntries();
     }
 
     protected void createCommerceSession() {
         CommerceService commerceService = currentPage.getContentResource().adaptTo(CommerceService.class);
+        if (commerceService == null) {
+            LOGGER.error("Failed to obtain commerce service");
+            return;
+        }
         try {
             commerceSession = commerceService.login(request, response);
             allPromotions = commerceSession.getPromotions();
@@ -123,33 +118,12 @@ public class ShoppingCartModel {
         }
     }
 
-    protected void populatePageUrls() {
-        String checkoutPageProperty = WCMUtils.getInheritedProperty(currentPage, resourceResolver,
-                CommerceConstants.PN_CHECKOUT_PAGE_PATH);
-        if (StringUtils.isNotEmpty(checkoutPageProperty)) {
-            checkoutPage = resourceResolver.map(request, checkoutPageProperty) + ".html";
-        }
-
-        currentPageUrl = resourceResolver.map(request, currentPage.getPath() + ".html");
-    }
-
-    public String getCheckoutPage() {
-        return checkoutPage;
-    }
-
-    public String getCurrentPageUrl() {
-        return currentPageUrl;
-    }
-
     public List<CartEntry> getEntries() {
-        return entries;
+        return Collections.unmodifiableList(entries);
     }
 
     public List<PromotionInfo> getOrderPromotions() {
-        return orderPromotions;
-    }
-    public boolean getIsReadOnly() {
-        return isReadOnly;
+        return Collections.unmodifiableList(orderPromotions);
     }
 
     public class CartEntry {
@@ -190,8 +164,30 @@ public class ShoppingCartModel {
         }
 
         public String getPrice() throws CommerceException {
-            List<PriceInfo> priceInfos = entry.getPriceInfo(new PriceFilter(WeRetailConstants.PRICE_FILTER_UNIT));
-            return CollectionUtils.isNotEmpty(priceInfos) ? priceInfos.get(0).getFormattedString() : null;
+            List<PriceInfo> priceInfos = entry.getPriceInfo(new PriceFilter(PRICE_TYPE_UNIT, PRICE_TYPE_DISCOUNT));
+            if (CollectionUtils.isNotEmpty(priceInfos)) {
+                return priceInfos.get(0).getFormattedString();
+            } else {
+                priceInfos = entry.getPriceInfo(new PriceFilter(PRICE_TYPE_UNIT));
+                return CollectionUtils.isNotEmpty(priceInfos) ? priceInfos.get(0).getFormattedString() : null;
+            }
+        }
+
+        public String getStrikeThroughPrice() throws CommerceException {
+            List<PriceInfo> priceInfos = entry.getPriceInfo(new PriceFilter(PRICE_TYPE_UNIT, PRICE_TYPE_DISCOUNT));
+            if (CollectionUtils.isNotEmpty(priceInfos)) {
+                priceInfos = entry.getPriceInfo(new PriceFilter(PRICE_TYPE_UNIT));
+                priceInfos = filterOut(priceInfos, PRICE_TYPE_DISCOUNT);
+
+                if (CollectionUtils.isNotEmpty(priceInfos)) {
+                    return priceInfos.get(0).getFormattedString();
+                }
+            }
+            return null;
+        }
+
+        public boolean isReadOnly() {
+            return BooleanUtils.toBoolean(entry.getProperty(CommerceSession.PN_READONLY, Boolean.class));
         }
 
         public ProductItem getProduct() throws CommerceException {
@@ -199,16 +195,34 @@ public class ShoppingCartModel {
         }
 
         public String getTotalPrice() throws CommerceException {
-            List<PriceInfo> priceInfos = entry.getPriceInfo(new PriceFilter(WeRetailConstants.PRICE_FILTER_LINE));
-            return CollectionUtils.isNotEmpty(priceInfos) ? priceInfos.get(0).getFormattedString() : null;
+            List<PriceInfo> priceInfos = entry.getPriceInfo(new PriceFilter(PRICE_TYPE_LINE, PRICE_TYPE_DISCOUNT));
+            if (CollectionUtils.isNotEmpty(priceInfos)) {
+                return priceInfos.get(0).getFormattedString();
+            } else {
+                priceInfos = entry.getPriceInfo(new PriceFilter(PRICE_TYPE_LINE, PRICE_TYPE_PRE_TAX));
+                return CollectionUtils.isNotEmpty(priceInfos) ? priceInfos.get(0).getFormattedString() : null;
+            }
+        }
+
+        public String getStrikeThroughTotalPrice() throws CommerceException {
+            List<PriceInfo> priceInfos = entry.getPriceInfo(new PriceFilter(PRICE_TYPE_LINE, PRICE_TYPE_DISCOUNT));
+            if (CollectionUtils.isNotEmpty(priceInfos)) {
+                priceInfos = entry.getPriceInfo(new PriceFilter(PRICE_TYPE_LINE, PRICE_TYPE_PRE_TAX));
+                priceInfos = filterOut(priceInfos, PRICE_TYPE_DISCOUNT);
+
+                if (CollectionUtils.isNotEmpty(priceInfos)) {
+                    return priceInfos.get(0).getFormattedString();
+                }
+            }
+            return null;
         }
 
         public Map<String, String> getVariantAxesMap() {
-            return variantAxesMap;
+            return Collections.unmodifiableMap(variantAxesMap);
         }
 
         public List<PromotionInfo> getEntryPromotions() {
-            return entryPromotions;
+            return Collections.unmodifiableList(entryPromotions);
         }
 
         public boolean isWrapping() {
@@ -217,6 +231,20 @@ public class ShoppingCartModel {
 
         public String getWrappingLabel() {
             return entry.getProperty("wrapping-label", String.class);
+        }
+
+        @SuppressWarnings("unchecked")
+        private List<PriceInfo> filterOut(List<PriceInfo> priceInfos, String filter) {
+            List<PriceInfo> result = new ArrayList<PriceInfo>();
+            for (PriceInfo priceInfo : priceInfos) {
+                if (priceInfo.containsKey(PriceFilter.PN_TYPES) && priceInfo.get(PriceFilter.PN_TYPES) instanceof Set) {
+                    final Set<String> types = (Set<String>) priceInfo.get(PriceFilter.PN_TYPES);
+                    if (!types.contains(filter)) {
+                        result.add(priceInfo);
+                    }
+                }
+            }
+            return result;
         }
     }
 }

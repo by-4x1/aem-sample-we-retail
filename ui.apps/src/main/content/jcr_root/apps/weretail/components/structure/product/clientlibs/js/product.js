@@ -16,6 +16,25 @@
 (function () {
     'use strict';
 
+    const entityMap = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+        '`': '&#x60;',
+        '=': '&#x3D;'
+    };
+
+    function escapeHtml(string) {
+        if (string === undefined) {
+            return string;
+        }
+        return String(string).replace(/[&<>"'`=]/g, function (s) {
+            return entityMap[s];
+        });
+    }
+
     Vue.component('we-product-variant', {
         props: [
             'isBase',
@@ -40,7 +59,7 @@
                     data[prop] = JSON.parse(self[prop]);
                 }
                 else {
-                    data[prop] = self[prop];
+                    data[prop] = escapeHtml(self[prop]);
                 }
             });
 
@@ -129,14 +148,6 @@
                         );
                     }
 
-                    if (this.product && window.CQ_Analytics && CQ_Analytics.ViewedProducts) {
-                        CQ_Analytics.ViewedProducts.record(
-                            this.product.pagePath,
-                            this.product.title,
-                            this.product.image,
-                            this.product.price
-                        );
-                    }
                 },
                 trackCartAdd: function (event) {
                     if (this.product && window.ContextHub && ContextHub.getStore("abandonedproducts")) {

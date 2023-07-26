@@ -10,4 +10,7 @@
     <product-page/>
     <redirect-page/>
     <experience-fragment-web-variation/>
+    <experience-fragment-facebook-variation/>
+    <experience-fragment-pinterest-variation/>
+    <experience-fragment-screens-variation/>
 </jcr:root>

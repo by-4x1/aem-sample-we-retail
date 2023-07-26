@@ -21,10 +21,12 @@ import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.scripting.SlingBindings;
 import org.apache.sling.servlethelpers.MockSlingHttpServletRequest;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -32,7 +34,6 @@ import org.junit.Test;
 import com.adobe.cq.commerce.api.CommerceService;
 import com.adobe.cq.commerce.common.PriceFilter;
 import com.adobe.cq.sightly.WCMBindings;
-import com.day.cq.dam.commons.util.DateParser;
 import com.day.cq.wcm.api.Page;
 
 import common.AppAemContext;
@@ -48,12 +49,13 @@ public class OrderHistoryModelTest {
     private static final String DUMMY_ORDER_LIST_ID_INDEX = "0";
 
     private SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
-    private SimpleDateFormat dateParser = new SimpleDateFormat("EEE MMM d yyyy HH:mm:ss 'GMT'Z");
+    private SimpleDateFormat dateParser = new SimpleDateFormat("EEE MMM d yyyy HH:mm:ss", Locale.US);
 
     @Rule
     public final AemContext context = AppAemContext.newAemContext();
 
     private OrderHistoryModel orderHistoryModel;
+    private MockCommerceSession commerceSession;
 
     @Before
     public void setUp() throws Exception {
@@ -66,7 +68,7 @@ public class OrderHistoryModelTest {
 
         MockSlingHttpServletRequest request = context.request();
         CommerceService commerceService = page.getContentResource().adaptTo(CommerceService.class);
-        MockCommerceSession commerceSession = (MockCommerceSession) commerceService.login(request, context.response());
+        commerceSession = (MockCommerceSession) commerceService.login(request, context.response());
 
         // We will use the mocked order defined in src/test/resources/sample-order.json twice
         // in order to have 2 orders in the order history: the "dummy" order is a copy of the mocked
@@ -76,7 +78,8 @@ public class OrderHistoryModelTest {
         // The dummy order is inserted first but should appear second in the test (see below)
         MockDefaultJcrPlacedOrder dummyOrder = new MockDefaultJcrPlacedOrder(null, DUMMY_ORDER_ID, orderResource);
         dummyOrder.setOrderId(DUMMY_ORDER_ID);
-        dummyOrder.setOrderPlacedDate(DateParser.parseDate(DUMMY_ORDER_DATE));
+        Calendar cal = (Calendar) orderResource.getValueMap().get("orderPlaced");
+        dummyOrder.setOrderPlacedDate(new Date(cal.getTimeInMillis()-86400000));
         commerceSession.registerPlacedOrder(DUMMY_ORDER_ID, dummyOrder);
 
         // This is the "original" mocked order
@@ -95,7 +98,7 @@ public class OrderHistoryModelTest {
         // done in OrderHistoryModel
         Date date0 = ((Calendar) orders.get(0).getOrder().get(Constants.ORDER_PLACED)).getTime();
         Date date1 = (Date) orders.get(1).getOrder().get(Constants.ORDER_PLACED);
-        assertEquals(1, date0.compareTo(date1));
+        assertEquals(1,date0.compareTo(date1));
         assertEquals(Constants.TEST_ORDER_ID, orders.get(0).getOrderId());
         assertEquals(DUMMY_ORDER_ID, orders.get(1).getOrderId());
 
@@ -116,5 +119,11 @@ public class OrderHistoryModelTest {
         assertEquals(Constants.ENTRIES_SIZE, order.getCartEntries().size());
         assertEquals(0, order.getPromotions().size());
         assertEquals(0, order.getVoucherInfos().size());
+    }
+
+    @After
+    public void tearDown() {
+        commerceSession.clearCart();
+        commerceSession.clearPlacedOrders();
     }
 }

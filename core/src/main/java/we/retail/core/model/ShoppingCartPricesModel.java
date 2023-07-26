@@ -40,7 +40,11 @@ import com.adobe.cq.commerce.common.PriceFilter;
 import com.day.cq.i18n.I18n;
 import com.day.cq.wcm.api.Page;
 
-import we.retail.core.WeRetailConstants;
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_CART;
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_PRE_TAX;
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_SHIPPING;
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_TAX;
+import static we.retail.core.WeRetailConstants.PRICE_TYPE_TOTAL;
 
 @Model(adaptables = SlingHttpServletRequest.class)
 public class ShoppingCartPricesModel {
@@ -68,6 +72,10 @@ public class ShoppingCartPricesModel {
     
     @ValueMapValue(injectionStrategy = InjectionStrategy.OPTIONAL)
     @Default(booleanValues = false)
+    private boolean showShippingTax;
+
+    @ValueMapValue(injectionStrategy = InjectionStrategy.OPTIONAL)
+    @Default(booleanValues = false)
     private boolean showTaxTotal;
     
     @ValueMapValue(injectionStrategy = InjectionStrategy.OPTIONAL)
@@ -76,6 +84,7 @@ public class ShoppingCartPricesModel {
     
     private boolean isEmpty;
     private String shippingTotal;
+    private String shippingTax;
     private String subTotal;
     private String taxTotal;
     private String total;
@@ -83,8 +92,12 @@ public class ShoppingCartPricesModel {
     private I18n i18n;
 
     @PostConstruct
-    private void initModel() throws Exception {
+    private void initModel() throws CommerceException {
         CommerceService commerceService = currentPage.getContentResource().adaptTo(CommerceService.class);
+        if (commerceService == null) {
+            LOGGER.error("Failed to obtain commerce service");
+            return;
+        }
         try {
             commerceSession = commerceService.login(request, response);
         } catch (CommerceException e) {
@@ -97,10 +110,11 @@ public class ShoppingCartPricesModel {
 
         isEmpty = commerceSession.getCartEntries().isEmpty();
         
-        shippingTotal = formatShippingPrice(commerceSession.getCartPriceInfo(new PriceFilter(WeRetailConstants.PRICE_FILTER_SHIPPING)));
-        subTotal = commerceSession.getCartPrice(new PriceFilter(WeRetailConstants.PRICE_FILTER_PRE_TAX));
-        taxTotal = commerceSession.getCartPrice(new PriceFilter(WeRetailConstants.PRICE_FILTER_TAX));
-        total = commerceSession.getCartPrice(new PriceFilter(WeRetailConstants.PRICE_FILTER_TOTAL));
+        shippingTotal = formatShippingPrice(commerceSession.getCartPriceInfo(new PriceFilter(PRICE_TYPE_SHIPPING, PRICE_TYPE_PRE_TAX)));
+        shippingTax = commerceSession.getCartPrice(new PriceFilter(PRICE_TYPE_SHIPPING, PRICE_TYPE_TAX));
+        subTotal = commerceSession.getCartPrice(new PriceFilter(PRICE_TYPE_CART, PRICE_TYPE_PRE_TAX));
+        taxTotal = commerceSession.getCartPrice(new PriceFilter(PRICE_TYPE_CART, PRICE_TYPE_TAX));
+        total = commerceSession.getCartPrice(new PriceFilter(PRICE_TYPE_TOTAL));
     }
 
     private String formatShippingPrice(List<PriceInfo> prices) {
@@ -126,6 +140,10 @@ public class ShoppingCartPricesModel {
         return showShippingTotal;
     }
     
+    public boolean getShowShippingTax() {
+        return showShippingTax;
+    }
+
     public boolean getShowTaxTotal() {
         return showTaxTotal;
     }
@@ -138,6 +156,10 @@ public class ShoppingCartPricesModel {
         return shippingTotal;
     }
     
+    public String getShippingTax() {
+        return shippingTax;
+    }
+
     public String getSubTotal() {
         return subTotal;
     }
